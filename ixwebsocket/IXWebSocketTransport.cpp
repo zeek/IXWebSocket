@@ -547,8 +547,11 @@ namespace ix
 
             if (_rxbuf.size() < ws.header_size + ws.N)
             {
+                _rxbufWanted = ws.header_size + ws.N;
                 return; /* Need: ws.header_size+ws.N - _rxbuf.size() */
             }
+
+            _rxbufWanted = 0;
 
             if (!ws.fin && (ws.opcode == wsheader_type::PING || ws.opcode == wsheader_type::PONG ||
                             ws.opcode == wsheader_type::CLOSE))
@@ -1098,6 +1101,14 @@ namespace ix
     {
         while (true)
         {
+            // If _rxbufWanted isn't set, don't attempt to read more into the receive
+            // buffer than a single chunk. There's no point and it'll only result
+            // in buffer bloat.
+            if (_rxbufWanted == 0 && _rxbuf.size() >= kChunkSize) break;
+
+            // There's also no point in reading more bytes than we need right now.
+            if (_rxbufWanted > 0 && _rxbuf.size() >= _rxbufWanted) break;
+
             ssize_t ret = _socket->recv((char*) &_readbuf[0], _readbuf.size());
 
             if (ret < 0 && Socket::isWaitNeeded())
